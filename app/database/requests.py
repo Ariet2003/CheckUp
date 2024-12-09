@@ -12,6 +12,8 @@ import random
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 import json
+from openpyxl import Workbook
+from sqlalchemy import select
 
 async def check_admin(telegram_id: str) -> bool:
     try:
@@ -136,3 +138,51 @@ async def delete_teacher(telegram_id: str) -> bool:
     except Exception as e:
         print(f"Error occurred while deleting admin: {e}")
         return False
+
+async def export_users_to_excel_by_role(role: UserRole, filename: str) -> bool:
+    try:
+        # Открываем сессию базы данных
+        async with async_session() as session:
+            # Выполняем запрос на получение пользователей с указанной ролью
+            if role == UserRole.TEACHER:
+                result = await session.execute(
+                    select(User).where(User.role == role)
+                )
+                users = result.scalars().all()
+            else:
+                result = await session.execute(
+                    select(User).where(User.role != UserRole.TEACHER)
+                )
+                users = result.scalars().all()
+
+            if not users:
+                print("No users found for the given role.")
+                return False
+
+            # Создаём Excel файл
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = f"{role.value} Users"
+
+            # Записываем заголовки
+            headers = ["User ID", "Full Name", "Role", "Login", "Created At"]
+            sheet.append(headers)
+
+            # Заполняем данные
+            for user in users:
+                sheet.append([
+                    user.user_id,
+                    user.full_name,
+                    user.role.value,
+                    user.login,
+                    user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else ""
+                ])
+
+            # Сохраняем файл
+            workbook.save(filename)
+            return True
+    except Exception as e:
+        print(f"Error in export_users_to_excel_by_role: {e}")
+        return False
+
+

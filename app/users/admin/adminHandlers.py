@@ -4,15 +4,17 @@ from datetime import datetime
 from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
+
+from app.database.models import UserRole
 from app.utils import router, sent_message_add_screen_ids
 from aiogram import F, Router
-
+from aiogram.types import FSInputFile
 from app.users.admin import adminKeyboards as kb
 from app.users.admin import adminStates as st
 from app import utils
 from app.database import requests as rq
 from aiogram.fsm.context import FSMContext
-
+import os
 from app.utils import sent_message_add_screen_ids, router
 
 
@@ -395,7 +397,6 @@ async def delete_teacher_finish(callback: CallbackQuery, state: FSMContext):
     teacher_telegram_id = str(callback.data.split("_")[2])
 
     is_deleted = await rq.delete_teacher(telegram_id=teacher_telegram_id)
-    print(123123123)
 
     if is_deleted:
         sent_message = await callback.message.answer_photo(
@@ -414,3 +415,108 @@ async def delete_teacher_finish(callback: CallbackQuery, state: FSMContext):
         )
         user_data['bot_messages'].append(sent_message.message_id)
         await state.clear()
+
+@router.callback_query(F.data == 'list_teacher')
+async def list_teacher(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Вы можете экспортировать список преподавателей в формате Excel..",
+        reply_markup=kb.export_teacher
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'export_teacher')
+async def export_teacher(callback: CallbackQuery, state: FSMContext):
+    try:
+        tuid = callback.message.chat.id
+        user_data = sent_message_add_screen_ids[tuid]
+        user_data['user_messages'].append(callback.message.message_id)
+        await delete_previous_messages(callback.message, tuid)
+
+        # Определяем путь к файлу в каталоге проекта
+        filename = os.path.join(os.getcwd(), "teachers.xlsx")
+        is_generate = await rq.export_users_to_excel_by_role(role=UserRole.TEACHER, filename=filename)
+
+        if is_generate:
+            # Отправляем файл пользователю
+            if os.path.exists(filename):
+                file = FSInputFile(filename)
+                sent_message = await callback.message.answer_document(
+                    document=file,
+                    caption="Готово! Вот ваш файл.",
+                    reply_markup=kb.go_to_admin
+                )
+                user_data['bot_messages'].append(sent_message.message_id)
+
+                # Удаляем файл после отправки
+                os.remove(filename)
+            else:
+                await callback.message.answer("Файл не найден после генерации.")
+        else:
+            sent_message = await callback.message.answer_photo(
+                photo=utils.adminViewUsersPicture,
+                caption="Ошибка при создании файла. Данные отсутствуют.",
+                reply_markup=kb.go_to_admin
+            )
+            user_data['bot_messages'].append(sent_message.message_id)
+    except Exception as e:
+        print(f"Error in export_teacher: {e}")
+        await callback.message.answer("Произошла ошибка. Попробуйте еще раз.")
+
+
+@router.callback_query(F.data == 'list_admin')
+async def list_admin(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Вы можете экспортировать список администраторов в формате Excel..",
+        reply_markup=kb.export_admin
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'export_admin')
+async def export_admin(callback: CallbackQuery, state: FSMContext):
+    try:
+        tuid = callback.message.chat.id
+        user_data = sent_message_add_screen_ids[tuid]
+        user_data['user_messages'].append(callback.message.message_id)
+        await delete_previous_messages(callback.message, tuid)
+
+        # Определяем путь к файлу в каталоге проекта
+        filename = os.path.join(os.getcwd(), "admins.xlsx")
+        is_generate = await rq.export_users_to_excel_by_role(role=UserRole.ADMIN, filename=filename)
+
+        if is_generate:
+            # Отправляем файл пользователю
+            if os.path.exists(filename):
+                file = FSInputFile(filename)
+                sent_message = await callback.message.answer_document(
+                    document=file,
+                    caption="Готово! Вот ваш файл.",
+                    reply_markup=kb.go_to_admin
+                )
+                user_data['bot_messages'].append(sent_message.message_id)
+
+                # Удаляем файл после отправки
+                os.remove(filename)
+            else:
+                await callback.message.answer("Файл не найден после генерации.")
+        else:
+            sent_message = await callback.message.answer_photo(
+                photo=utils.adminViewUsersPicture,
+                caption="Ошибка при создании файла. Данные отсутствуют.",
+                reply_markup=kb.go_to_admin
+            )
+            user_data['bot_messages'].append(sent_message.message_id)
+    except Exception as e:
+        print(f"Error in export_teacher: {e}")
+        await callback.message.answer("Произошла ошибка. Попробуйте еще раз.")

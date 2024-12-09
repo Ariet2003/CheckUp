@@ -14,6 +14,8 @@ view_users = InlineKeyboardMarkup(inline_keyboard=[
      InlineKeyboardButton(text="➖ Преподавателя", callback_data="delete_teacher")],
     [InlineKeyboardButton(text="➕ Администратора", callback_data="add_admin"),
      InlineKeyboardButton(text="➖ Администратора", callback_data="delete_admin")],
+    [InlineKeyboardButton(text="📄 Преподаватели", callback_data="list_teacher"),
+     InlineKeyboardButton(text="📄 Администраторы", callback_data="list_admin")],
     [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
 ])
 
@@ -36,3 +38,13 @@ def deleting_confirmation_teacher(telegram_id: str):
         [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
     ])
     return keyboard
+
+export_teacher = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="📥 Экспорт", callback_data="export_teacher")],
+    [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+])
+
+export_admin = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="📥 Экспорт", callback_data="export_admin")],
+    [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+])
