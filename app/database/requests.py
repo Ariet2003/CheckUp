@@ -65,3 +65,74 @@ async def add_user(full_name: str, role: UserRole, login: str) -> bool:
             await session.commit()
 
             return True  # Возвращаем True, если пользователь был успешно добавлен
+
+async def check_super_admin(telegram_id: str) -> bool:
+    try:
+        async with async_session() as session:
+            async with session.begin():
+                result = await session.execute(
+                    select(User).where(
+                        User.login == telegram_id, User.role == UserRole.SUPERADMIN
+                    )
+                )
+                admin = result.scalar_one_or_none()
+
+                if admin:
+                    return True
+                else:
+                    return False
+    except Exception as e:
+        print(f"Error occurred while checking if user is admin: {e}")
+        return False
+
+async def delete_admin(telegram_id: str) -> bool:
+    try:
+        async with async_session() as session:
+            async with session.begin():
+                # Проверяем, существует ли админ с таким telegram_id
+                result = await session.execute(
+                    select(User).where(
+                        User.login == telegram_id,
+                        or_(User.role == UserRole.ADMIN, User.role == UserRole.SUPERADMIN)
+                    )
+                )
+                admin = result.scalar_one_or_none()
+
+                # Если админ найден, удаляем его
+                if admin:
+                    await session.execute(
+                        delete(User).where(
+                            User.login == telegram_id  # Удаляем по telegram_id
+                        )
+                    )
+                    await session.commit()
+                    return True
+                else:
+                    return False
+    except Exception as e:
+        print(f"Error occurred while deleting admin: {e}")
+        return False
+
+async def delete_teacher(telegram_id: str) -> bool:
+    try:
+        async with async_session() as session:
+            async with session.begin():
+                result = await session.execute(
+                    select(User).where(
+                        User.login == telegram_id, User.role == UserRole.TEACHER)
+                    )
+                teacher = result.scalar_one_or_none()
+
+                if teacher:
+                    await session.execute(
+                        delete(User).where(
+                            User.login == telegram_id  # Удаляем по telegram_id
+                        )
+                    )
+                    await session.commit()
+                    return True
+                else:
+                    return False
+    except Exception as e:
+        print(f"Error occurred while deleting admin: {e}")
+        return False

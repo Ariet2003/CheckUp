@@ -119,11 +119,20 @@ async def add_admin(callback: CallbackQuery, state: FSMContext):
     user_data['user_messages'].append(callback.message.message_id)
     await delete_previous_messages(callback.message, tuid)
 
-    sent_message = await callback.message.answer_photo(
-        photo=utils.adminViewUsersPicture,
-        caption="Напишите ФИО администратора"
-    )
-    user_data['bot_messages'].append(sent_message.message_id)
+    is_super_admin = await rq.check_super_admin(telegram_id=tuid)
+    if is_super_admin:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Напишите ФИО администратора"
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+    else:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Вы не можете совершить это действие.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
     await state.set_state(st.AddAdmin.full_name)
 
 @router.message(st.AddAdmin.full_name)
@@ -155,7 +164,7 @@ async def add_admin_role(message: Message, state: FSMContext):
 
     sent_message = await message.answer_photo(
         photo=utils.adminViewUsersPicture,
-        caption="Напишите TELEGRAM ID преподавателя"
+        caption="Напишите TELEGRAM ID администратора"
     )
     user_data['bot_messages'].append(sent_message.message_id)
     await state.set_state(st.AddAdmin.login)
@@ -177,11 +186,6 @@ async def add_admin_login(message: Message, state: FSMContext):
     else:
         admin_role = "ADMIN"
 
-    print(
-        f"Full name: {admin_full_name}"
-        f"Role: {admin_role}"
-        f"Login: {admin_login}"
-    )
     is_added = await rq.add_user(full_name=admin_full_name, role=admin_role, login=admin_login)
     if is_added:
         sent_message = await message.answer_photo(
@@ -200,3 +204,213 @@ async def add_admin_login(message: Message, state: FSMContext):
 
 
     await state.clear()
+
+@router.callback_query(F.data == 'delete_admin')
+async def add_admin(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    is_super_admin = await rq.check_super_admin(telegram_id=tuid)
+    if is_super_admin:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Напишите TELEGRAM ID администратора"
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+        await state.set_state(st.DeleteAdmin.login)
+    else:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Вы не можете совершить это действие.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+
+
+@router.message(st.DeleteAdmin.login)
+async def delete_admin(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+    telegram_id_admin = message.text
+
+    await state.update_data(telegram_id_admin=telegram_id_admin)
+    sent_message = await message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption=f"Вы действительно хотите удалить админа с Telegram ID = {telegram_id_admin}?",
+        reply_markup=kb.deleting_confirmation(telegram_id=str(telegram_id_admin))
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(lambda c: c.data and c.data.startswith("delete_admin_"))
+async def delete_admin_finish(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    admin_telegram_id = str(callback.data.split("_")[2])
+
+    is_deleted = await rq.delete_admin(telegram_id=admin_telegram_id)
+
+    if is_deleted:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Администратор успешно удален.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+        await state.clear()
+
+    else:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Администратор не удалён, произошла ошибка.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+        await state.clear()
+
+@router.callback_query(F.data == 'add_teacher')
+async def add_teacher(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    is_super_admin = await rq.check_super_admin(telegram_id=tuid)
+    if is_super_admin:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Напишите ФИО преподавателя"
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+    else:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Вы не можете совершить это действие.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.AddTeacher.full_name)
+
+@router.message(st.AddTeacher.full_name)
+async def add_teacher_full_name(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+
+    teacher_full_name = message.text
+    await state.update_data(teacher_full_name=teacher_full_name)
+
+    sent_message = await message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Напишите TELEGRAM ID преподавателя"
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.AddTeacher.login)
+
+@router.message(st.AddTeacher.login)
+async def add_teacher_login(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+
+    teacher_login = message.text
+
+    data = await state.get_data()
+    teacher_full_name = data.get("teacher_full_name")
+    teacher_role = "TEACHER"
+    is_added = await rq.add_user(full_name=teacher_full_name, role=teacher_role, login=teacher_login)
+    if is_added:
+        sent_message = await message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Пользователь успешно добавлен",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+    else:
+        sent_message = await message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Произошла ошибка или пользователь уже существует, попробуйте добавить еще раз.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+
+
+    await state.clear()
+
+@router.callback_query(F.data == 'delete_teacher')
+async def delete_admin(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    is_super_admin = await rq.check_super_admin(telegram_id=tuid)
+    if is_super_admin:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Напишите TELEGRAM ID преподавателя"
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+        await state.set_state(st.DeleteTeacher.login)
+    else:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Вы не можете совершить это действие.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+
+
+@router.message(st.DeleteTeacher.login)
+async def delete_teacher(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+    telegram_id_teacher = message.text
+
+    await state.update_data(telegram_id_teacher=telegram_id_teacher)
+    sent_message = await message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption=f"Вы действительно хотите удалить преподавателя с Telegram ID = {telegram_id_teacher}?",
+        reply_markup=kb.deleting_confirmation_teacher(telegram_id=str(telegram_id_teacher))
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(lambda c: c.data and c.data.startswith("delete_teacher_"))
+async def delete_teacher_finish(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    teacher_telegram_id = str(callback.data.split("_")[2])
+
+    is_deleted = await rq.delete_teacher(telegram_id=teacher_telegram_id)
+    print(123123123)
+
+    if is_deleted:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Преподаватель успешно удален.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+        await state.clear()
+
+    else:
+        sent_message = await callback.message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Преподаватель не удалён, произошла ошибка.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+        await state.clear()

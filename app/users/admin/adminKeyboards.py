@@ -20,3 +20,19 @@ view_users = InlineKeyboardMarkup(inline_keyboard=[
 go_to_admin = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
 ])
+
+def deleting_confirmation(telegram_id: str):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Да", callback_data=f'delete_admin_{telegram_id}'),
+         InlineKeyboardButton(text="Нет", callback_data='go_home_admin')],
+        [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+    ])
+    return keyboard
+
+def deleting_confirmation_teacher(telegram_id: str):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Да", callback_data=f'delete_teacher_{telegram_id}'),
+         InlineKeyboardButton(text="Нет", callback_data='go_home_admin')],
+        [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+    ])
+    return keyboard
