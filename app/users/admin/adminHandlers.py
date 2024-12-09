@@ -3,7 +3,7 @@ from datetime import datetime
 
 from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from app.utils import router, sent_message_add_screen_ids
 from aiogram import F, Router
 
@@ -14,6 +14,21 @@ from app.database import requests as rq
 from aiogram.fsm.context import FSMContext
 
 from app.utils import sent_message_add_screen_ids, router
+
+
+# Хендлер для обработки команды "/photo"
+@router.message(Command("photo"))
+async def request_photo_handler(message: Message):
+    await message.answer("Пожалуйста, отправьте фото, чтобы я мог получить его ID.")
+
+
+# Хендлер для обработки фото от пользователя
+@router.message(F.photo)
+async def photo_handler(message: Message):
+    # Берем фотографию в самом большом разрешении и получаем ее ID
+    photo_id = message.photo[-1].file_id
+    await message.answer(f"ID вашей картинки: {photo_id}")
+
 
 # Function to delete previous messages
 async def delete_previous_messages(message: Message, telegram_id: str):
@@ -43,4 +58,145 @@ async def delete_previous_messages(message: Message, telegram_id: str):
 
 @router.message(CommandStart())
 async def start(message: Message, state: FSMContext):
-    await message.answer("Hello world!")
+    tuid = message.chat.id
+    # Инициализируем словарь для нового пользователя, если его еще нет
+    if tuid not in sent_message_add_screen_ids:
+        sent_message_add_screen_ids[tuid] = {'bot_messages': [], 'user_messages': []}
+    user_data = sent_message_add_screen_ids[tuid]
+    is_admin = await rq.check_admin(telegram_id=str(tuid))
+    if is_admin:
+        await admin_account(message, state)
+    else:
+        sent_message = await message.answer("Hello, world!")
+        # Добавляем сообщение бота
+        user_data['bot_messages'].append(sent_message.message_id)
+        #########################################################
+        # TO DO: Сделать личный кабинет преподавателя
+        #########################################################
+
+
+async def admin_account(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    # Добавляем сообщение пользователя
+    user_data['user_messages'].append(message.message_id)
+    # Удаляем предыдущие сообщения
+    await delete_previous_messages(message, tuid)
+    name = await rq.get_name(str(tuid))
+    sent_message = await message.answer_photo(
+        photo=utils.adminAccountPicture,
+        caption=f'Привет, {name}',
+        reply_markup=kb.admin_account
+    )
+    # Добавляем сообщение бота
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'view_user')
+async def view_user_handler(callback: CallbackQuery):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Выберите действие",
+        reply_markup=kb.view_users
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data.in_('go_home_admin'))
+async def go_home_admin(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['bot_messages'].append(callback.message.message_id)
+    await admin_account(callback.message, state)
+
+@router.callback_query(F.data == 'add_admin')
+async def add_admin(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Напишите ФИО администратора"
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.AddAdmin.full_name)
+
+@router.message(st.AddAdmin.full_name)
+async def add_admin_full_name(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+
+    admin_full_name = message.text
+    await state.update_data(admin_full_name=admin_full_name)
+
+    sent_message = await message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Напишите 1, если хотите назначить его супер администратором, 0 — если администратором."
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.AddAdmin.role)
+
+@router.message(st.AddAdmin.role)
+async def add_admin_role(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+
+    admin_role = message.text
+    await state.update_data(admin_role=admin_role)
+
+    sent_message = await message.answer_photo(
+        photo=utils.adminViewUsersPicture,
+        caption="Напишите TELEGRAM ID преподавателя"
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.AddAdmin.login)
+
+@router.message(st.AddAdmin.login)
+async def add_admin_login(message: Message, state: FSMContext):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+
+    admin_login = message.text
+
+    data = await state.get_data()
+    admin_full_name = data.get("admin_full_name")
+    admin_role = data.get("admin_role")
+    if admin_role == "1":
+        admin_role = "SUPERADMIN"
+    else:
+        admin_role = "ADMIN"
+
+    print(
+        f"Full name: {admin_full_name}"
+        f"Role: {admin_role}"
+        f"Login: {admin_login}"
+    )
+    is_added = await rq.add_user(full_name=admin_full_name, role=admin_role, login=admin_login)
+    if is_added:
+        sent_message = await message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Пользователь успешно добавлен",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+    else:
+        sent_message = await message.answer_photo(
+            photo=utils.adminViewUsersPicture,
+            caption="Произошла ошибка или пользователь уже существует, попробуйте добавить еще раз.",
+            reply_markup=kb.go_to_admin
+        )
+        user_data['bot_messages'].append(sent_message.message_id)
+
+
+    await state.clear()

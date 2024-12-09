@@ -4,4 +4,5 @@ router = Router()
 
 sent_message_add_screen_ids = {}
 
-AccountPicture = 'AgACAgIAAxkBAAP6Z1bCAXxuv9XOBZpiNiRVW_UOHvQAAgnnMRu5y7lKzkjOtrK-1hEBAAMCAAN5AAM2BA'
+adminAccountPicture = 'AgACAgIAAxkBAAIBVWdXA_cNc-oo7pUZ_FWC-raGEzSeAAIF6TEb8365Sq0edrJcGxpdAQADAgADeQADNgQ'
+adminViewUsersPicture = 'AgACAgIAAxkBAAIBYWdXCWByRki7fKqbcR1jhagAAc7_1gACZekxG_N-uUqNte1B85bxKQEAAwIAA3kAAzYE'

@@ -19,6 +19,7 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 # Enum для роли пользователя
 class UserRole(PyEnum):
+    SUPERADMIN = 'superadmin'
     ADMIN = "admin"
     TEACHER = "teacher"
 
@@ -37,9 +38,9 @@ class User(Base):
     __tablename__ = 'users'
 
     user_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)
     login: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, server_default=func.current_timestamp())
 
 # Таблица факультетов
@@ -114,3 +115,4 @@ class AttendanceHistoryStudent(Base):
 async def async_main():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
