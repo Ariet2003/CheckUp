@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import or_, func, CompoundSelect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import async_session, User, UserRole, Student, Faculty, Department, Course, Group, Schedule, \
@@ -325,4 +325,81 @@ async def import_faculties_from_excel(filename: str) -> str:
         return f"Ошибка целостности данных: {e.orig}"
     except Exception as e:
         return f"Произошла ошибка при импорте: {e}"
+
+
+async def export_departments_to_excel(filename: str) -> bool:
+    try:
+        # Открываем сессию базы данных
+        async with async_session() as session:
+            # Выполняем запрос на получение всех кафедр
+            result = await session.execute(select(Department))
+            departments = result.scalars().all()
+
+            if not departments:
+                print("No departments found.")
+                return False
+
+            # Создаём Excel файл
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Departments"
+
+            # Записываем заголовки
+            headers = ["Department ID", "Name", "Faculty ID"]
+            sheet.append(headers)
+
+            # Заполняем данные
+            for department in departments:
+                sheet.append([department.department_id, department.name, department.faculty_id])
+
+            # Сохраняем файл
+            workbook.save(filename)
+            return True
+    except Exception as e:
+        print(f"Error in export_departments_to_excel: {e}")
+        return False
+
+
+async def import_departments_from_excel(filename: str) -> str:
+    try:
+        # Загружаем файл Excel
+        workbook = load_workbook(filename=filename)
+        sheet = workbook.active
+
+        # Проверяем наличие заголовков
+        headers = ["Department ID", "Name", "Faculty ID"]
+        if not all(header == sheet.cell(row=1, column=i + 1).value for i, header in enumerate(headers)):
+            return "Неверный формат Excel файла. Проверьте заголовки: Department ID, Name, Faculty ID."
+
+        async with async_session() as session:
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                department_id, name, faculty_id = row
+
+                if not name or not faculty_id:
+                    continue  # Пропускаем записи с пустыми значениями
+
+                # Проверяем, существует ли запись с таким ID (если `department_id` передаётся)
+                if department_id:
+                    department = await session.get(Department, department_id)
+                    if department:
+                        department.name = name
+                        department.faculty_id = faculty_id  # Обновляем faculty_id
+                    else:
+                        # Добавляем новую запись
+                        new_department = Department(department_id=department_id, name=name, faculty_id=faculty_id)
+                        session.add(new_department)
+                else:
+                    # Добавляем новую запись без `department_id`
+                    new_department = Department(name=name, faculty_id=faculty_id)
+                    session.add(new_department)
+
+            await session.commit()
+        return "Данные успешно импортированы в БД."
+    except FileNotFoundError:
+        return "Файл не найден. Проверьте путь."
+    except IntegrityError as e:
+        return f"Ошибка целостности данных: {e.orig}"
+    except Exception as e:
+        return f"Произошла ошибка при импорте: {e}"
+
 

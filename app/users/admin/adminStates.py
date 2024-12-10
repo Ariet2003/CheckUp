@@ -17,3 +17,6 @@ class DeleteTeacher(StatesGroup):
 
 class ImportFaculties(StatesGroup):
     sendFile = State()
+
+class ImportDepartments(StatesGroup):
+    sendFile = State()

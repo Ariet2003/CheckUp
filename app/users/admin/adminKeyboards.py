@@ -64,3 +64,9 @@ manage_faculties = InlineKeyboardMarkup(inline_keyboard=[
      InlineKeyboardButton(text="📤 Импорт", callback_data="import_faculty")],
     [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
 ])
+
+manage_departments = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="📥 Экспорт", callback_data="export_department"),
+     InlineKeyboardButton(text="📤 Импорт", callback_data="import_department")],
+    [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+])

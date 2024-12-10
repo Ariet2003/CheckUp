@@ -595,7 +595,8 @@ async def export_faculty(callback: CallbackQuery, state: FSMContext):
                 # Удаляем файл после отправки
                 os.remove(filename)
             else:
-                await callback.message.answer("Файл не найден после генерации.")
+                await callback.message.answer("Файл не найден после генерации.",
+                                              reply_markup=kb.go_to_admin)
         else:
             sent_message = await callback.message.answer(
                 "Ошибка при создании файла. Данные отсутствуют.",
@@ -604,7 +605,8 @@ async def export_faculty(callback: CallbackQuery, state: FSMContext):
             user_data['bot_messages'].append(sent_message.message_id)
     except Exception as e:
         print(f"Error in export_faculty: {e}")
-        await callback.message.answer("Произошла ошибка. Попробуйте еще раз.")
+        await callback.message.answer("Произошла ошибка. Попробуйте еще раз.",
+                                      reply_markup=kb.go_to_admin)
 
 @router.callback_query(F.data == 'import_faculty')
 async def import_faculties(callback: CallbackQuery, state: FSMContext):
@@ -614,6 +616,7 @@ async def import_faculties(callback: CallbackQuery, state: FSMContext):
     await delete_previous_messages(callback.message, tuid)
     sent_message = await callback.message.answer(
         "Отправьте файл в формате Excel.",
+    reply_markup=kb.go_to_admin
     )
     user_data['bot_messages'].append(sent_message.message_id)
     await state.set_state(st.ImportFaculties.sendFile)
@@ -621,6 +624,10 @@ async def import_faculties(callback: CallbackQuery, state: FSMContext):
 
 @router.message(st.ImportFaculties.sendFile)
 async def import_faculties(message: Message):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
     try:
         # Получаем ID файла и информацию о нём
         file_id = message.document.file_id
@@ -637,7 +644,8 @@ async def import_faculties(message: Message):
                     with open(file_path, 'wb') as f:
                         f.write(await response.read())
                 else:
-                    await message.answer("Не удалось скачать файл. Проверьте правильность загрузки.")
+                    await message.answer("Не удалось скачать файл. Проверьте правильность загрузки.",
+                                         reply_markup=kb.go_to_admin)
                     return
 
         # Импортируем данные в БД
@@ -647,6 +655,99 @@ async def import_faculties(message: Message):
         os.remove(file_path)
 
         # Отправляем результат пользователю
-        await message.answer(result)
+        await message.answer(result,
+                             reply_markup=kb.go_to_admin)
+    except Exception as e:
+        await message.answer(f"Произошла ошибка: {e}")
+
+@router.callback_query(F.data == 'manage_deportment')
+async def manage_department(callback: CallbackQuery):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminManagePicture,
+        caption="Вы можете экспортировать все данные о кафедрах в формате Excel."
+                "\nМожете импортировать данные из файла Excel в БД",
+        reply_markup=kb.manage_departments
+    )
+
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'export_department')
+async def export_department(callback: CallbackQuery, state: FSMContext):
+    try:
+        tuid = callback.message.chat.id
+        user_data = sent_message_add_screen_ids[tuid]
+        user_data['user_messages'].append(callback.message.message_id)
+        await delete_previous_messages(callback.message, tuid)
+
+        filename = os.path.join(os.getcwd(), "departments.xlsx")
+        is_generate = await rq.export_departments_to_excel(filename=filename)
+
+        if is_generate:
+            if os.path.exists(filename):
+                file = FSInputFile(filename)
+                sent_message = await callback.message.answer_document(
+                    document=file,
+                    caption="Готово! Вот данные кафедр.",
+                    reply_markup=kb.go_to_admin
+                )
+                user_data['bot_messages'].append(sent_message.message_id)
+                os.remove(filename)
+            else:
+                await callback.message.answer("Файл не найден после генерации.",
+                                              reply_markup=kb.go_to_admin)
+        else:
+            sent_message = await callback.message.answer(
+                "Ошибка при создании файла. Данные отсутствуют.",
+                reply_markup=kb.go_to_admin
+            )
+            user_data['bot_messages'].append(sent_message.message_id)
+    except Exception as e:
+        print(f"Error in export_department: {e}")
+        await callback.message.answer("Произошла ошибка. Попробуйте еще раз.",
+                                      reply_markup=kb.go_to_admin)
+
+@router.callback_query(F.data == 'import_department')
+async def import_departments(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+    sent_message = await callback.message.answer(
+        "Отправьте файл в формате Excel.",
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.ImportDepartments.sendFile)
+
+
+@router.message(st.ImportDepartments.sendFile)
+async def import_departments(message: Message):
+    tuid = message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(message.message_id)
+    await delete_previous_messages(message, tuid)
+    try:
+        file_id = message.document.file_id
+        file_info = await message.bot.get_file(file_id)
+        file_path = os.path.join(os.getcwd(), message.document.file_name)
+        file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file_info.file_path}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as response:
+                if response.status == 200:
+                    with open(file_path, 'wb') as f:
+                        f.write(await response.read())
+                else:
+                    await message.answer("Не удалось скачать файл. Проверьте правильность загрузки.",
+                        reply_markup=kb.go_to_admin)
+                    return
+
+        result = await rq.import_departments_from_excel(filename=file_path)
+        os.remove(file_path)
+        await message.answer(result,
+                             reply_markup=kb.go_to_admin)
     except Exception as e:
         await message.answer(f"Произошла ошибка: {e}")
