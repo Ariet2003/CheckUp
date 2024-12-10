@@ -15,6 +15,8 @@ from sqlalchemy.orm import aliased
 import json
 from openpyxl import Workbook
 from sqlalchemy import select, func
+from openpyxl import load_workbook
+from sqlalchemy.exc import IntegrityError
 
 
 async def check_admin(telegram_id: str) -> bool:
@@ -247,3 +249,80 @@ async def get_university_statistics() -> str:
     except Exception as e:
         print(f"Error occurred while fetching statistics: {e}")
         return "Произошла ошибка при получении статистики. Попробуйте позже."
+
+async def export_faculties_to_excel(filename: str) -> bool:
+    try:
+        # Открываем сессию базы данных
+        async with async_session() as session:
+            # Выполняем запрос на получение всех факультетов
+            result = await session.execute(select(Faculty))
+            faculties = result.scalars().all()
+
+            if not faculties:
+                print("No faculties found.")
+                return False
+
+            # Создаём Excel файл
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Faculties"
+
+            # Записываем заголовки
+            headers = ["Faculty ID", "Name"]
+            sheet.append(headers)
+
+            # Заполняем данные
+            for faculty in faculties:
+                sheet.append([faculty.faculty_id, faculty.name])
+
+            # Сохраняем файл
+            workbook.save(filename)
+            return True
+    except Exception as e:
+        print(f"Error in export_faculties_to_excel: {e}")
+        return False
+
+
+
+async def import_faculties_from_excel(filename: str) -> str:
+    try:
+        # Загружаем файл Excel
+        workbook = load_workbook(filename=filename)
+        sheet = workbook.active  # Предполагается, что данные на первом листе
+
+        # Проверяем наличие заголовков
+        headers = ["Faculty ID", "Name"]
+        if not all(header == sheet.cell(row=1, column=i + 1).value for i, header in enumerate(headers)):
+            return "Неверный формат Excel файла. Проверьте заголовки: Faculty ID, Name."
+
+        # Открываем сессию для записи в БД
+        async with async_session() as session:
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                faculty_id, name = row
+
+                if not name:  # Пропускаем записи с пустыми названиями
+                    continue
+
+                # Проверяем, существует ли запись с таким ID (если `faculty_id` передаётся)
+                if faculty_id:
+                    faculty = await session.get(Faculty, faculty_id)
+                    if faculty:
+                        faculty.name = name  # Обновляем название
+                    else:
+                        # Добавляем новую запись
+                        new_faculty = Faculty(faculty_id=faculty_id, name=name)
+                        session.add(new_faculty)
+                else:
+                    # Добавляем новую запись без `faculty_id`
+                    new_faculty = Faculty(name=name)
+                    session.add(new_faculty)
+
+            await session.commit()
+        return "Данные успешно импортированы в БД."
+    except FileNotFoundError:
+        return "Файл не найден. Проверьте путь."
+    except IntegrityError as e:
+        return f"Ошибка целостности данных: {e.orig}"
+    except Exception as e:
+        return f"Произошла ошибка при импорте: {e}"
+

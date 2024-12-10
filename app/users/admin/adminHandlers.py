@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 
+from aiogram.client.session import aiohttp
 from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
@@ -536,3 +537,116 @@ async def view_statistics(callback: CallbackQuery):
         parse_mode=ParseMode.MARKDOWN
     )
     user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'admin_manage')
+async def admin_manage(callback: CallbackQuery):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminManagePicture,
+        caption="Выберите действие",
+        reply_markup=kb.manage_admin
+    )
+
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'manage_faculty')
+async def manage_faculty(callback: CallbackQuery):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    sent_message = await callback.message.answer_photo(
+        photo=utils.adminManagePicture,
+        caption="Вы можете экспортировать все данные о факультете в формате Excel."
+                "\nМожете импортировать данные из файла Excel в БД",
+        reply_markup=kb.manage_faculties
+    )
+
+    user_data['bot_messages'].append(sent_message.message_id)
+
+@router.callback_query(F.data == 'export_faculty')
+async def export_faculty(callback: CallbackQuery, state: FSMContext):
+    try:
+        tuid = callback.message.chat.id
+        user_data = sent_message_add_screen_ids[tuid]
+        user_data['user_messages'].append(callback.message.message_id)
+        await delete_previous_messages(callback.message, tuid)
+
+        # Определяем путь к файлу в каталоге проекта
+        filename = os.path.join(os.getcwd(), "faculties.xlsx")
+        is_generate = await rq.export_faculties_to_excel(filename=filename)
+
+        if is_generate:
+            # Отправляем файл пользователю
+            if os.path.exists(filename):
+                file = FSInputFile(filename)
+                sent_message = await callback.message.answer_document(
+                    document=file,
+                    caption="Готово! Вот данные факультетов.",
+                    reply_markup=kb.go_to_admin
+                )
+                user_data['bot_messages'].append(sent_message.message_id)
+
+                # Удаляем файл после отправки
+                os.remove(filename)
+            else:
+                await callback.message.answer("Файл не найден после генерации.")
+        else:
+            sent_message = await callback.message.answer(
+                "Ошибка при создании файла. Данные отсутствуют.",
+                reply_markup=kb.go_to_admin
+            )
+            user_data['bot_messages'].append(sent_message.message_id)
+    except Exception as e:
+        print(f"Error in export_faculty: {e}")
+        await callback.message.answer("Произошла ошибка. Попробуйте еще раз.")
+
+@router.callback_query(F.data == 'import_faculty')
+async def import_faculties(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+    sent_message = await callback.message.answer(
+        "Отправьте файл в формате Excel.",
+    )
+    user_data['bot_messages'].append(sent_message.message_id)
+    await state.set_state(st.ImportFaculties.sendFile)
+
+
+@router.message(st.ImportFaculties.sendFile)
+async def import_faculties(message: Message):
+    try:
+        # Получаем ID файла и информацию о нём
+        file_id = message.document.file_id
+        file_info = await message.bot.get_file(file_id)
+
+        # Определяем путь для сохранения файла
+        file_path = os.path.join(os.getcwd(), message.document.file_name)
+
+        # Скачиваем файл по предоставленному Telegram URL
+        file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file_info.file_path}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as response:
+                if response.status == 200:
+                    with open(file_path, 'wb') as f:
+                        f.write(await response.read())
+                else:
+                    await message.answer("Не удалось скачать файл. Проверьте правильность загрузки.")
+                    return
+
+        # Импортируем данные в БД
+        result = await rq.import_faculties_from_excel(filename=file_path)
+
+        # Удаляем файл после обработки
+        os.remove(file_path)
+
+        # Отправляем результат пользователю
+        await message.answer(result)
+    except Exception as e:
+        await message.answer(f"Произошла ошибка: {e}")

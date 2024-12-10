@@ -48,3 +48,19 @@ export_admin = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="📥 Экспорт", callback_data="export_admin")],
     [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
 ])
+
+manage_admin = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="👥 Студенты", callback_data="manage_students"),
+     InlineKeyboardButton(text="📅 Расписание", callback_data="manage_schedule")],
+    [InlineKeyboardButton(text="📜 Группы", callback_data="manage_group"),
+     InlineKeyboardButton(text="🔰 Курсы", callback_data="manage_course")],
+    [InlineKeyboardButton(text="🔰 Факультеты", callback_data="manage_faculty"),
+     InlineKeyboardButton(text="🔰 Кафедры", callback_data="manage_deportment")],
+    [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+])
+
+manage_faculties = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="📥 Экспорт", callback_data="export_faculty"),
+     InlineKeyboardButton(text="📤 Импорт", callback_data="import_faculty")],
+    [InlineKeyboardButton(text="⬅️ Личный кабинет", callback_data="go_home_admin")]
+])

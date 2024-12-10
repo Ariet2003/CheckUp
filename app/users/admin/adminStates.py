@@ -14,3 +14,6 @@ class AddTeacher(StatesGroup):
 
 class DeleteTeacher(StatesGroup):
     login = State()
+
+class ImportFaculties(StatesGroup):
+    sendFile = State()
