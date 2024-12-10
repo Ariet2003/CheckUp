@@ -7,6 +7,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 
 from app.database.models import UserRole
+from app.users.teacher.teacherHandlers import teacher_account
 from app.utils import router, sent_message_add_screen_ids
 from aiogram import F, Router
 from aiogram.types import FSInputFile
@@ -70,12 +71,7 @@ async def start(message: Message, state: FSMContext):
     if is_admin:
         await admin_account(message, state)
     else:
-        sent_message = await message.answer("Hello, world!")
-        # Добавляем сообщение бота
-        user_data['bot_messages'].append(sent_message.message_id)
-        #########################################################
-        # TO DO: Сделать личный кабинет преподавателя
-        #########################################################
+        await teacher_account(message, state)
 
 
 async def admin_account(message: Message, state: FSMContext):

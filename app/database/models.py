@@ -101,7 +101,6 @@ class AttendanceHistory(Base):
     history_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey('users.user_id'), nullable=False)
     date_time: Mapped[TIMESTAMP] = mapped_column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
-    attendance_history_student_id: Mapped[int] = mapped_column(ForeignKey('attendance_history_students.id'), nullable=False)
 
 # Таблица для связи истории посещаемости и студентов
 class AttendanceHistoryStudent(Base):

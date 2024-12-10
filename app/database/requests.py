@@ -3,7 +3,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import or_, func, CompoundSelect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import async_session, User, UserRole, Student, Faculty, Department, Course, Group, Schedule, \
-    AttendanceHistoryStudent
+    AttendanceHistoryStudent, AttendanceHistory
 from sqlalchemy.exc import SQLAlchemyError
 from bot_instance import bot
 from sqlalchemy import select, delete
@@ -17,6 +17,8 @@ from openpyxl import Workbook
 from sqlalchemy import select, func
 from openpyxl import load_workbook
 from sqlalchemy.exc import IntegrityError
+from datetime import datetime
+from sqlalchemy.future import select
 
 
 async def check_admin(telegram_id: str) -> bool:
@@ -402,4 +404,140 @@ async def import_departments_from_excel(filename: str) -> str:
     except Exception as e:
         return f"Произошла ошибка при импорте: {e}"
 
+
+
+async def get_students_for_current_lesson(telegram_id: int) -> List[int]:
+    try:
+        # Получаем текущее время и игнорируем миллисекунды
+        current_time = datetime.now().replace(microsecond=0).time()
+        print(current_time)
+
+        async with async_session() as session:
+            # Получаем пользователя по telegram_id
+            user_query = await session.execute(select(User).filter(User.login == telegram_id))
+            user = user_query.scalars().first()
+            print(user)
+            if not user:
+                return []  # Если преподаватель не найден
+
+            # Получаем расписание для данного преподавателя в текущее время
+            schedule_query = await session.execute(
+                select(Schedule)
+                .filter(Schedule.teacher_id == user.user_id)
+                .filter(Schedule.time_start <= current_time)
+                .filter(Schedule.time_end >= current_time)
+            )
+            schedule = schedule_query.scalars().first()
+            print(schedule)
+
+            if not schedule:
+                return []  # Если нет текущего занятия
+
+            # Получаем студентов группы, связанной с этим расписанием
+            group_query = await session.execute(
+                select(Group).filter(Group.group_id == schedule.group_id)
+            )
+            group = group_query.scalars().first()
+
+            if not group:
+                return []  # Если группа не найдена
+
+            # Получаем всех студентов из этой группы
+            students_query = await session.execute(
+                select(Student.student_id)
+                .filter(Student.group_id == group.group_id)
+            )
+            students = students_query.scalars().all()
+
+            return students
+
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+        return []
+
+async def get_student_names_by_ids(student_ids: List[int]) -> List[dict]:
+    """
+    Получает имена студентов по их student_id.
+
+    :param student_ids: Список student_id.
+    :return: Список словарей {"student_id": int, "name": str}.
+    """
+    try:
+        async with async_session() as session:
+            students_query = await session.execute(
+                select(Student.student_id, Student.name)
+                .filter(Student.student_id.in_(student_ids))
+            )
+            students = students_query.all()
+            return [{"student_id": student.student_id, "name": student.name} for student in students]
+    except Exception as e:
+        print(f"Ошибка при получении студентов: {e}")
+        return []
+
+
+async def record_attendance(
+        checked_student_id: List[int],
+        unchecked_student_id: List[int],
+        telegram_id: int  # Вместо teacher_id передаем telegram_id
+) -> bool:
+    """
+    Записывает данные посещаемости в таблицы AttendanceHistory и AttendanceHistoryStudent.
+
+    :param checked_student_id: Список ID студентов, которые присутствовали.
+    :param unchecked_student_id: Список ID студентов, которые отсутствовали.
+    :param telegram_id: telegram_id учителя, записывающего посещаемость.
+    :return: True, если данные успешно сохранены, иначе False.
+    """
+    try:
+        async with async_session() as session:
+            async with session.begin():
+                # Ищем user_id по telegram_id
+                teacher = await session.execute(
+                    select(User).filter(User.login == telegram_id)
+                )
+                teacher = teacher.scalar_one_or_none()
+
+                if teacher is None:
+                    raise ValueError("Учитель с таким telegram_id не найден")
+
+                teacher_id = teacher.user_id  # Получаем user_id учителя
+
+                # Проверяем, есть ли уже запись для этого учителя
+                existing_history = await session.execute(
+                    select(AttendanceHistory).filter(AttendanceHistory.teacher_id == teacher_id)
+                )
+                existing_history = existing_history.scalar_one_or_none()
+
+                if existing_history:
+                    raise ValueError("Посещаемость для этого занятия уже была записана.")
+
+                # Создаем запись в AttendanceHistory
+                attendance_history = AttendanceHistory(teacher_id=teacher_id)
+                session.add(attendance_history)
+                await session.flush()  # Получаем ID созданной записи
+
+                # ID истории посещаемости
+                history_id = attendance_history.history_id
+
+                # Формируем записи для присутствующих студентов
+                checked_records = [
+                    AttendanceHistoryStudent(history_id=history_id, student_id=student_id, status=True)
+                    for student_id in checked_student_id
+                ]
+
+                # Формируем записи для отсутствующих студентов
+                unchecked_records = [
+                    AttendanceHistoryStudent(history_id=history_id, student_id=student_id, status=False)
+                    for student_id in unchecked_student_id
+                ]
+
+                # Добавляем все записи в сессию
+                session.add_all(checked_records + unchecked_records)
+
+            # Сохраняем изменения
+            await session.commit()
+            return True
+    except Exception as e:
+        print(f"Ошибка при записи посещаемости: {e}")
+        return False
 
