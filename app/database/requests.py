@@ -2,7 +2,8 @@ from typing import Optional, List
 from sqlalchemy.orm import selectinload
 from sqlalchemy import or_, func, CompoundSelect
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.models import async_session, User, UserRole
+from app.database.models import async_session, User, UserRole, Student, Faculty, Department, Course, Group, Schedule, \
+    AttendanceHistoryStudent
 from sqlalchemy.exc import SQLAlchemyError
 from bot_instance import bot
 from sqlalchemy import select, delete
@@ -13,7 +14,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 import json
 from openpyxl import Workbook
-from sqlalchemy import select
+from sqlalchemy import select, func
+
 
 async def check_admin(telegram_id: str) -> bool:
     try:
@@ -186,3 +188,62 @@ async def export_users_to_excel_by_role(role: UserRole, filename: str) -> bool:
         return False
 
 
+
+async def get_university_statistics() -> str:
+    try:
+        async with async_session() as session:
+            # Общее количество пользователей
+            total_users = await session.scalar(select(func.count(User.user_id)))
+            total_admins = await session.scalar(
+                select(func.count(User.user_id)).where(User.role == UserRole.ADMIN)
+            )
+            total_super_admins = await session.scalar(
+                select(func.count(User.user_id)).where(User.role == UserRole.SUPERADMIN)
+            )
+            total_admins = total_admins + total_super_admins
+            total_teachers = await session.scalar(
+                select(func.count(User.user_id)).where(User.role == UserRole.TEACHER)
+            )
+            total_students = await session.scalar(select(func.count(Student.student_id)))
+
+            # Количество факультетов и кафедр
+            total_faculties = await session.scalar(select(func.count(Faculty.faculty_id)))
+            total_departments = await session.scalar(select(func.count(Department.department_id)))
+
+            # Количество курсов и групп
+            total_courses = await session.scalar(select(func.count(Course.course_id)))
+            total_groups = await session.scalar(select(func.count(Group.group_id)))
+
+            # Количество записей в расписании
+            total_schedule_entries = await session.scalar(select(func.count(Schedule.schedule_id)))
+
+            # Пропущенные занятия
+            total_absences = await session.scalar(
+                select(func.count(AttendanceHistoryStudent.id)).where(
+                    AttendanceHistoryStudent.status == False
+                )
+            )
+
+            # Формирование текста статистики
+            stats_text = (
+                f"📊 *Университетская статистика*\n\n"
+                f"👥 Пользователи:\n"
+                f"   - Всего: {total_users}\n"
+                f"   - Администраторы: {total_admins}\n"
+                f"   - Преподаватели: {total_teachers}\n"
+                f"   - Студенты: {total_students}\n\n"
+                f"🏢 Структура:\n"
+                f"   - Факультеты: {total_faculties}\n"
+                f"   - Кафедры: {total_departments}\n"
+                f"   - Курсы: {total_courses}\n"
+                f"   - Группы: {total_groups}\n\n"
+                f"📅 Расписание:\n"
+                f"   - Записей: {total_schedule_entries}\n\n"
+                f"❌ Пропущенные занятия:\n"
+                f"   - Всего пропусков: {total_absences}\n"
+            )
+
+            return stats_text
+    except Exception as e:
+        print(f"Error occurred while fetching statistics: {e}")
+        return "Произошла ошибка при получении статистики. Попробуйте позже."
