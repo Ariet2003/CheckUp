@@ -3,7 +3,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import or_, func, CompoundSelect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import async_session, User, UserRole, Student, Faculty, Department, Course, Group, Schedule, \
-    AttendanceHistoryStudent, AttendanceHistory
+    AttendanceHistoryStudent, AttendanceHistory, WeekDay
 from sqlalchemy.exc import SQLAlchemyError
 from bot_instance import bot
 from sqlalchemy import select, delete
@@ -541,3 +541,53 @@ async def record_attendance(
         print(f"Ошибка при записи посещаемости: {e}")
         return False
 
+from datetime import datetime
+
+async def get_simple_teacher_schedule(telegram_id: str) -> str:
+    try:
+        # Получаем текущий день недели
+        current_day = WeekDay(datetime.today().strftime('%A').upper())
+
+        async with async_session() as session:
+            # Ищем user_id по telegram_id
+            teacher_query = await session.execute(
+                select(User.user_id)
+                .filter(User.login == telegram_id)
+            )
+            teacher = teacher_query.scalar_one_or_none()
+
+            if not teacher:
+                raise ValueError(f"Преподаватель с telegram_id {telegram_id} не найден.")
+
+            teacher_id = teacher  # Получаем user_id преподавателя
+
+            # Получаем расписание на текущий день для преподавателя
+            schedule_query = await session.execute(
+                select(Schedule, Group.name)
+                .join(Group, Group.group_id == Schedule.group_id)  # Присоединяем таблицу Group для получения названия группы
+                .filter(Schedule.teacher_id == teacher_id, Schedule.day_of_week == current_day)
+                .order_by(Schedule.time_start)
+            )
+            schedule = schedule_query.all()
+
+            # Формируем результат
+            result_text = f"🗓️ Расписание на {current_day.name.capitalize()}:\n\n"
+
+            # Проверяем, если нет расписания, сообщаем об этом
+            if not schedule:
+                return result_text + "❌ Сегодня нет занятий."
+
+            # Формируем текст для каждого занятия
+            for item in schedule:
+                group_name = item[1]  # Название группы из второго столбца запроса
+                time_start = item[0].time_start.strftime('%H:%M')  # Время начала
+                time_end = item[0].time_end.strftime('%H:%M')  # Время окончания
+
+                result_text += f"📚 Группа: {group_name}\n"
+                result_text += f"⏰ Время: {time_start} - {time_end}\n\n"
+
+            return result_text
+
+    except Exception as e:
+        print(f"Ошибка при получении расписания преподавателя: {e}")
+        return "❌ Произошла ошибка при получении расписания."

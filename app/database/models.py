@@ -25,13 +25,13 @@ class UserRole(PyEnum):
 
 # Enum для дней недели
 class WeekDay(PyEnum):
-    MONDAY = "Monday"
-    TUESDAY = "Tuesday"
-    WEDNESDAY = "Wednesday"
-    THURSDAY = "Thursday"
-    FRIDAY = "Friday"
-    SATURDAY = "Saturday"
-    SUNDAY = "Sunday"
+    MONDAY = "MONDAY"
+    TUESDAY = "TUESDAY"
+    WEDNESDAY = "WEDNESDAY"
+    THURSDAY = "THURSDAY"
+    FRIDAY = "FRIDAY"
+    SATURDAY = "SATURDAY"
+    SUNDAY = "SUNDAY"
 
 # Таблица пользователей
 class User(Base):

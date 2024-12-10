@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from sched import scheduler
 
 from aiogram.client.session import aiohttp
 from aiogram.enums import ParseMode
@@ -747,3 +748,7 @@ async def import_departments(message: Message):
                              reply_markup=kb.go_to_admin)
     except Exception as e:
         await message.answer(f"Произошла ошибка: {e}")
+
+
+
+

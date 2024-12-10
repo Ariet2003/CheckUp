@@ -175,3 +175,22 @@ async def finish_selection(callback: CallbackQuery, state: FSMContext):
         user_data['bot_messages'].append(sent_message.message_id)
 
         await state.clear()
+
+
+@router.callback_query(F.data == 'view_schedule')
+async def view_schedule(callback: CallbackQuery, state: FSMContext):
+    tuid = callback.message.chat.id
+    user_data = sent_message_add_screen_ids[tuid]
+    user_data['user_messages'].append(callback.message.message_id)
+    await delete_previous_messages(callback.message, tuid)
+
+    schedule = await rq.get_simple_teacher_schedule(str(tuid))
+
+    sent_message = await callback.message.answer(
+        text=schedule,
+        reply_markup=kb.go_to_teacher,
+        ParseMode=ParseMode.MARKDOWN
+    )
+
+    # Добавляем сообщение бота
+    user_data['bot_messages'].append(sent_message.message_id)
